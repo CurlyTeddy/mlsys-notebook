@@ -88,7 +88,7 @@ $$\begin{aligned} T_\text{math} &= \frac{2 \cdot 2 \cdot B \cdot D \cdot F}{X \c
 As with pure data-parallelism, we are compute bound when $B / X > C / W_{ici}$ It means if our per-device batch size is big enough to be compute-bound for pure data-parallelism, we can, without worrying about leaving the compute-bound regime, simply upgrade to FSDP
 
 ### Tensor parallelism
-Also called model parallelism: activations sharded along D, parameters sharded along F. AllGather and ReduceScatter activations before and after each block. Compatible with FSDP. $$\text{In}[B, D_Y] \cdot_D W_\text{in}[D, F_Y] \cdot_F W_\text{out}[F_Y, D] \rightarrow \text{Out}[B, D_Y]$$ Tensor Parallelism is only cheaper when when the activations $B \times D$ are smaller than the weights $D \times F$. If only the $Y$ axis is used, every device processes the full global batch $B$ in tokens, often millions. $F$ is typically only tens of thousands, so we often mix it with FSDP to make $B$ smaller.
+Also called model parallelism: activations sharded along D, parameters sharded along F. AllGather and ReduceScatter activations before and after each block. Compatible with FSDP. $$\text{In}[B, D_Y] \cdot_D W_\text{in}[D, F_Y] \cdot_F W_\text{out}[F_Y, D] \rightarrow \text{Out}[B, D_Y]$$ **Tensor Parallelism is only cheaper when when the activations $B \times D$ are smaller than the weights $D \times F$.** If only the $Y$ axis is used, every device processes the full global batch $B$ in tokens, often millions. $F$ is typically only tens of thousands, so we often mix it with FSDP to make $B$ smaller.
 > **Forward pass:** need to compute $\text{Loss}[B]$
 >
 > 1. $\text{In}[B, D] = \textbf{AllGather}(\text{In}[B, D_Y])$ *(on critical path)*
