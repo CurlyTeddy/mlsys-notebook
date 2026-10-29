@@ -40,7 +40,7 @@ $$\begin{equation*} \text{Theoretical Max Tokens/s} = \frac{\text{Batch Size} \t
 
 As our batch size grows, FLOPs begin to dominate parameter loading, so in practice we have the more general equation (this is the most important thing to remember):
 
-$$\begin{align} \tiny \text{Theoretical Step Time (General)} = \underbrace{\frac{\text{Batch Size} \times \text{KV Cache Size}}{\tiny \text{Total Memory Bandwidth}}}_{\text{Attention (always bandwidth-bound)}} + \underbrace{\max\left(\frac{2 \times \text{Batch Size} \times \text{Parameter Count}}{\text{Total FLOPs/s}}, \frac{\text{Parameter Size}}{\text{Total Memory Bandwidth}}\right)}_{\tiny \text{MLP (can be compute-bound)}} \end{align}$$
+$$\begin{align} \text{Theoretical Step Time (General)} = \underbrace{\frac{\text{Batch Size} \times \text{KV Cache Size}}{ \text{Total Memory Bandwidth}}}_{\text{Attention (always bandwidth-bound)}} + \underbrace{\max\left(\frac{2 \times \text{Batch Size} \times \text{Parameter Count}}{\text{Total FLOPs/s}}, \frac{\text{Parameter Size}}{\text{Total Memory Bandwidth}}\right)}_{ \text{MLP (can be compute-bound)}} \end{align}$$
 
 ### Memory
 During inference, we don't have optimizer state and checkpoints to store. Activations are too small to consider so we only need to calculate model parameters and KV cache. For LLaMA 2-13B, model weights take 26GB memory and KV cache for a single 8192 sequence at bf16 is
