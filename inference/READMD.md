@@ -46,6 +46,11 @@ $$\begin{align} \text{Theoretical Step Time (General)} = \underbrace{\frac{\text
 During inference, we don't have optimizer state and checkpoints to store. Activations are too small to consider so we only need to calculate model parameters and KV cache. For LLaMA 2-13B, model weights take 26GB memory and KV cache for a single 8192 sequence at bf16 is
 $8192\ (T) \times 40\ (K) \times 128\ (H) \times 40\ (L) \times 2\ (\text{bytes}) \times 2 = 6.7 \text{GB}$
 
+### Hop Latency
+Don't forget transfering data over ICI has a fixed latency per hop.
+$$T_{total} = \max\left(\frac{T_{min} \cdot |X|}{2}, \frac{B}{W_{ICI}}\right)$$
+Hop latency is $T_\text{min} = 10^{-6} s$ so we can get $(\text{bytes} / n_\text{shards}) / W_{ici}^{uni} < 1e-6$. Using model parallelism, we become bound in int8 when $Y > BD / 45,000$
+
 ### Tricks for Improving Generation Throughput and Latency
 A smaller KV cache makes it easier to increase batch size and context length of the generation step without hurting latency so many techniques have been developed to target the KV cache specifically.
 - GQA
