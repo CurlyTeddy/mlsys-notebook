@@ -15,6 +15,8 @@ A personal notebook of ML systems concepts. One folder per concept, each explain
 - `README.md` is the entry point so the folder renders on GitHub when browsed.
 - Supporting files exist only to be referenced from `README.md`. An artifact no prose points to is dead weight — delete it or link it.
 
+`paper-replication/<paper-name>/` holds paper replications, each with `src/` and `tests/`. These folders are named after the paper and need no `README.md`, so the concept-folder rules do not apply. Run tests with `python -m pytest` from the paper's folder.
+
 ## Writing a concept note
 
 Use the `note` skill (`.claude/skills/note/SKILL.md`) — it holds the note structure, sourcing rules, and style bar.
@@ -27,5 +29,5 @@ Use the `note` skill (`.claude/skills/note/SKILL.md`) — it holds the note stru
 
 ## Gotchas
 
-- This is prose-first, not a codebase. There is no build, no test suite, and no dependency file — don't add one for a single snippet.
+- This is prose-first. There is no build. Python dependencies live in the shared root `pyproject.toml`, so don't add one per folder.
 - Do not create a concept folder without content. An empty folder with a stub `README.md` is worse than no folder.

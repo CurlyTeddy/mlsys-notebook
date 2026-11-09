@@ -5,7 +5,22 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "datasets>=5.1.0",
     "jax[cuda13]>=0.11.2",
+    "pytest>=9.2.0",
     "tensorboard>=2.21.0",
     "tensorboard-plugin-profile>=2.23.2",
+    "torch>=2.12.1",
+    "torchmetrics>=1.9.0",
+    "transformers>=5.22.2",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
