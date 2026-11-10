@@ -14,14 +14,30 @@ class KVCachePool:
         length: int,
         heads: int,
         head_dim: int,
-        memory_ratio: float=0.7,
-        dtype: torch.dtype=torch.float32,
-        device: torch.device | str="cpu"
+        memory_ratio: float = 0.7,
+        dtype: torch.dtype = torch.float32,
+        device: torch.device | str = "cpu",
     ):
-        mem = psutil.virtual_memory().available if torch.device(device).type == "cpu" else torch.cuda.mem_get_info()[0]
+        mem = (
+            psutil.virtual_memory().available
+            if torch.device(device).type == "cpu"
+            else torch.cuda.mem_get_info()[0]
+        )
         dtype_size = torch.empty((), dtype=dtype).element_size()
-        slots = int(mem * memory_ratio / (layers * 2 * length * heads * head_dim * dtype_size))
-        self._cache = torch.zeros(slots, layers, 2, length, heads, head_dim, dtype=dtype, device=device, requires_grad=False)
+        slots = int(
+            mem * memory_ratio / (layers * 2 * length * heads * head_dim * dtype_size)
+        )
+        self._cache = torch.zeros(
+            slots,
+            layers,
+            2,
+            length,
+            heads,
+            head_dim,
+            dtype=dtype,
+            device=device,
+            requires_grad=False,
+        )
         self._free_slots = [i for i in range(slots)]
 
     @contextmanager
@@ -41,7 +57,7 @@ class KVCacheHandle:
         self._seq_len = [0] * layers
 
     def get(self, layer: int):
-        kv = self._pool._cache[self._slots, layer, :, :self._seq_len[layer]]
+        kv = self._pool._cache[self._slots, layer, :, : self._seq_len[layer]]
 
         return kv[:, 0], kv[:, 1]
 
@@ -50,9 +66,7 @@ class KVCacheHandle:
         start = self._seq_len[layer]
         if start + length > self._pool._cache.shape[3]:
             raise ValueError("Sequence exceeds cache length.")
-        
-        self._pool._cache[self._slots, layer, 0, start:start + length] = key
-        self._pool._cache[self._slots, layer, 1, start:start + length] = value
+
+        self._pool._cache[self._slots, layer, 0, start : start + length] = key
+        self._pool._cache[self._slots, layer, 1, start : start + length] = value
         self._seq_len[layer] += length
-    
-    
