@@ -12,15 +12,24 @@ from transformers import AutoTokenizer, GenerationConfig, LlamaConfig
 from inference.src.cache import KVCachePool
 
 
+def resolve_dtype(dtype: str | torch.dtype | None) -> torch.dtype:
+    """Convert a config's dtype, which may be a name or unset, to a ``torch.dtype``."""
+    if isinstance(dtype, torch.dtype):
+        return dtype
+
+    return torch.get_default_dtype() if dtype is None else getattr(torch, dtype)
+
+
 class LlamaModel(nn.Module):
     def __init__(self, config: LlamaConfig):
         super().__init__()
-        self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, dtype=config.dtype)
-        self.norm = RMSNorm(config.hidden_size, config.rms_norm_eps, dtype=config.dtype)
+        dtype = resolve_dtype(config.dtype)
+        self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, dtype=dtype)
+        self.norm = RMSNorm(config.hidden_size, config.rms_norm_eps, dtype=dtype)
         self.layers = nn.ModuleList(
             DecoderLayer(
                 q_heads=config.num_attention_heads,
-                kv_heads=config.num_key_value_heads,
+                kv_heads=config.num_key_value_heads or config.num_attention_heads,
                 d_model=config.hidden_size,
                 d_k=config.hidden_size // config.num_attention_heads,
                 k_dim=config.hidden_size,
@@ -31,7 +40,7 @@ class LlamaModel(nn.Module):
                 attn_bias=config.attention_bias,
                 mlp_bias=config.mlp_bias,
                 eps=config.rms_norm_eps,
-                dtype=config.dtype
+                dtype=dtype
             ) for i in range(config.num_hidden_layers)
         )
 
@@ -53,7 +62,7 @@ class LlamaForCausalLM(nn.Module):
     def __init__(self, config: LlamaConfig):
         super().__init__()
         self.model = LlamaModel(config)
-        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False, dtype=config.dtype)
+        self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False, dtype=resolve_dtype(config.dtype))
         self.cfg = config
 
     def forward(self, input_ids: torch.Tensor, padding_mask: torch.Tensor | None=None, is_causal: bool=True, cache: KVCacheHandle | None=None):
@@ -104,12 +113,13 @@ class LlamaForCausalLM(nn.Module):
                     assert next_token_id.shape == (batch, 1), f"unexpected shape {next_token_id.shape}"
                     input_ids = torch.cat([input_ids, next_token_id], dim=-1)
             else:
+                kv_heads = self.cfg.num_key_value_heads or self.cfg.num_attention_heads
                 cache = KVCachePool(
                     self.cfg.num_hidden_layers,
                     max_length,
-                    self.cfg.num_key_value_heads,
-                    self.cfg.hidden_size // self.cfg.num_key_value_heads,
-                    dtype=self.model.embed_tokens.weight.dtype,
+                    kv_heads,
+                    self.cfg.hidden_size // kv_heads,
+                    dtype=self.model.embed_tokens.weight.dtype,   # 4 bits is the weight storage type, LinearNF4 uses input type as the compute type
                     device=input_ids.device
                 )
                 
@@ -169,7 +179,9 @@ for name, shard in sorted(indexes["weight_map"].items(), key=lambda x: x[1]):
     # weights are only quantized when moving from cpu to gpu
     with safe_open(f"{path}/{shard}", "pt", "cpu") as f:
         if isinstance(mod, LinearNF4) and param_name == "weight":
-            mod.weight = Params4bit(f.get_tensor(name), quant_type="nf4", compress_statistics=True).to(device)
+            # Upstream annotations are wrong: pyright checks these kwargs against torch's Parameter.__init__ stub,
+            # and bitsandbytes binds Params4bit.to's self to nn.Module. Both work at runtime.
+            mod.weight = Params4bit(f.get_tensor(name), quant_type="nf4", compress_statistics=True).to(device)  # pyright: ignore[reportCallIssue, reportAttributeAccessIssue]
         else:
             setattr(mod, param_name, nn.Parameter(f.get_tensor(name).to(device)))
 

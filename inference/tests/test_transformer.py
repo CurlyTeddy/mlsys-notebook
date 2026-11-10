@@ -70,14 +70,16 @@ def test_forward_matches_sdpa(q_heads: int, kv_heads: int, T: int, S: int, mode:
     if mode == "causal" and T != S:
         pytest.skip("causal alignment differs for T != S")
 
-    dims = {"d_model": 64, "k_dim": 48, "v_dim": 56}
+    d_model, k_dim, v_dim = 64, 48, 56
     model = GroupQueryAttention(q_heads,
                                 kv_heads,
+                                d_model=d_model,
                                 d_k=64,
+                                k_dim=k_dim,
+                                v_dim=v_dim,
                                 layer_index=0,
-                                **dims,
                                 rope_parameters=rope_params).double().eval()
-    q, k, v = make_inputs(2, T, S, **dims)
+    q, k, v = make_inputs(2, T, S, d_model, k_dim, v_dim)
     attn_mask, kpm = make_masks(2, T, S)
     kw = {
         "is_causal": (mode == "causal"),

@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import Literal
 
 import torch
@@ -15,6 +16,16 @@ class RMSNorm(nn.Module):
 
     def forward(self, x: torch.Tensor):
         return x / (((x ** 2).mean(dim=-1, keepdim=True) + self.eps) ** 0.5) * self.weight
+
+
+def _rope_float(rope_parameters: Mapping[str, object], key: str) -> float:
+    """Read a numeric RoPE setting, which ``RopeParameters`` declares as optional."""
+    value = rope_parameters.get(key)
+    if not isinstance(value, int | float):
+        raise TypeError(f"rope_parameters[{key!r}] must be a number, got {value!r}.")
+
+    return value
+
 
 class GroupQueryAttention(nn.Module):
     """Grouped-query attention (GQA).
@@ -37,7 +48,7 @@ class GroupQueryAttention(nn.Module):
             self-attention and may differ for cross-attention.
         v_dim (int): Feature dimension of the value input. Equals ``d_model``
             for self-attention and may differ for cross-attention.
-        rope_parameters (RopeParameters | None, optional): Configuration for
+        rope_parameters (RopeParameters | dict | None, optional): Configuration for
             rotary position embeddings applied to queries and keys. If
             ``None``, no rotary embedding is applied. Defaults to ``None``.
         attn_bias (bool, optional): Whether the query, key, value and output
@@ -53,7 +64,7 @@ class GroupQueryAttention(nn.Module):
             k_dim: int,
             v_dim: int,
             layer_index: int,
-            rope_parameters: RopeParameters | None = None,
+            rope_parameters: RopeParameters | dict | None = None,
             attn_bias=True,
             dtype: torch.dtype=torch.float32
     ):
@@ -75,10 +86,11 @@ class GroupQueryAttention(nn.Module):
         self.v_proj = nn.Linear(v_dim, d_model // group_size, attn_bias, dtype=dtype)
         self.o_proj = nn.Linear(d_model, d_model, attn_bias, dtype=dtype)
 
-    def _scale_rope(self, freq: torch.Tensor) -> torch.Tensor:
-        original_max_pos = self.rope_parameters["original_max_position_embeddings"]
-        factor = self.rope_parameters["factor"]
-        high_freq_factor, low_freq_factor = self.rope_parameters["high_freq_factor"], self.rope_parameters["low_freq_factor"]
+    def _scale_rope(self, freq: torch.Tensor, rope_parameters: Mapping[str, object]) -> torch.Tensor:
+        original_max_pos = _rope_float(rope_parameters, "original_max_position_embeddings")
+        factor = _rope_float(rope_parameters, "factor")
+        high_freq_factor = _rope_float(rope_parameters, "high_freq_factor")
+        low_freq_factor = _rope_float(rope_parameters, "low_freq_factor")
 
         ratio = original_max_pos / (2 * torch.pi / freq)
         smooth_factor = ((ratio - low_freq_factor) / (high_freq_factor - low_freq_factor)).clamp(0, 1)
@@ -116,8 +128,8 @@ class GroupQueryAttention(nn.Module):
         # output dimension of pretrained weights on HuggingFace are interleved as [0, 2, 4, 6...1, 3, 5, 7]
         # whether m and n start from 0 or 1 doesn't matter since RoPE only retains the relative position information
         if self.rope_parameters:
-            freq = self.rope_parameters["rope_theta"] ** (-torch.arange(head_dim // 2).repeat(2) * 2 / head_dim)
-            freq = self._scale_rope(freq).to(dtype=Q.dtype)
+            freq = _rope_float(self.rope_parameters, "rope_theta") ** (-torch.arange(head_dim // 2).repeat(2) * 2 / head_dim)
+            freq = self._scale_rope(freq, self.rope_parameters).to(dtype=Q.dtype)
             angle = (freq[None, None, None, ...].repeat(t, 1, 1, 1) * torch.arange(t)[..., None, None, None]).to(device=Q.device)   # t, 1, 1, head_dim
             Q = Q * torch.cos(angle) + torch.cat([-Q[..., head_dim // 2:], Q[..., :head_dim // 2]], dim=-1) * torch.sin(angle)
             angle = (freq[None, None, ...].repeat(s, 1, 1) * torch.arange(s)[..., None, None]).to(device=Q.device)   # s, 1, head_dim
@@ -165,7 +177,7 @@ class MLP(nn.Module):
             return self.down_proj(self.up_proj(x) * gated_x / (1 + torch.e ** -gated_x))
 
         if self.mode == "relu":
-            return self.down_proj(torch.maximum(0, self.up_proj(x)))
+            return self.down_proj(torch.relu(self.up_proj(x)))
 
         raise NotImplementedError("Only support silu and relu.")
 
@@ -181,7 +193,7 @@ class DecoderLayer(nn.Module):
         v_dim: int,
         d_ff: int,
         layer_index: int,
-        rope_parameters: RopeParameters | None = None,
+        rope_parameters: RopeParameters | dict | None = None,
         attn_bias=True,
         mlp_bias=True,
         eps: float=1e-5,
