@@ -1,7 +1,6 @@
 import pytest
 import torch
 import torch.nn.functional as F
-from src.transformer import MLP, GroupQueryAttention
 from transformers import LlamaConfig
 from transformers.modeling_rope_utils import RopeParameters
 from transformers.models.llama.modeling_llama import (
@@ -9,6 +8,8 @@ from transformers.models.llama.modeling_llama import (
     LlamaRotaryEmbedding,
     apply_rotary_pos_emb,
 )
+
+from inference.src.transformer import MLP, GroupQueryAttention
 
 
 def make_inputs(B, T, S, d_model, k_dim, v_dim, requires_grad=False):
@@ -71,10 +72,11 @@ def test_forward_matches_sdpa(q_heads: int, kv_heads: int, T: int, S: int, mode:
 
     dims = {"d_model": 64, "k_dim": 48, "v_dim": 56}
     model = GroupQueryAttention(q_heads,
-                                                                kv_heads,
-                                                                d_k=64,
-                                                                **dims,
-                                                                rope_parameters=rope_params).double().eval()
+                                kv_heads,
+                                d_k=64,
+                                layer_index=0,
+                                **dims,
+                                rope_parameters=rope_params).double().eval()
     q, k, v = make_inputs(2, T, S, **dims)
     attn_mask, kpm = make_masks(2, T, S)
     kw = {

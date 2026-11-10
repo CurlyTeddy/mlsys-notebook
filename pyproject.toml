@@ -8,6 +8,7 @@ dependencies = [
     "bitsandbytes>=0.50.2",
     "datasets>=5.1.0",
     "jax[cuda13]>=0.11.2",
+    "psutil>=7.2.2",
     "pytest>=9.2.0",
     "tensorboard>=2.21.0",
     "tensorboard-plugin-profile>=2.23.2",
@@ -15,6 +16,15 @@ dependencies = [
     "torchmetrics>=1.9.0",
     "transformers>=5.22.2",
 ]
+
+[build-system]
+requires = ["uv_build>=0.11.19,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "inference"
+module-root = ""
+namespace = true
 
 [[tool.uv.index]]
 name = "pytorch-cu130"
@@ -25,3 +35,6 @@ explicit = true
 torch = [
   { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
